@@ -23,10 +23,10 @@ def obtain_retrain_autodeeplab_args():
     parser.add_argument('--beta', action='store_true', default=False, help='resnet101 beta')
     parser.add_argument('--crop_size', type=int, default=769, help='image crop size')
     parser.add_argument('--resize', type=int, default=769, help='image crop size')
-    parser.add_argument('--workers', type=int, default=4, help='number of data loading workers')
+    parser.add_argument('--workers', type=int, default=0, help='number of data loading workers')
     parser.add_argument('--seed', type=int, default=1, metavar='S', help='random seed (default: 1)')
     parser.add_argument('--resume', type=str, default=None, help='put the path to resuming file if needed')
-    parser.add_argument('--filter_multiplier', type=int, default=32)
+    parser.add_argument('--filter_multiplier', type=int, default=20)
     parser.add_argument('--dist', type=bool, default=False)
     parser.add_argument('--autodeeplab', type=str, default='train')
     parser.add_argument('--block_multiplier', type=int, default=5)
@@ -41,6 +41,7 @@ def obtain_retrain_autodeeplab_args():
     parser.add_argument('--mode', default='poly', type=str, help='how lr decline')
     parser.add_argument('--local_rank', dest='local_rank', type=int, default=-1, )
     parser.add_argument('--train_mode', type=str, default='iter', choices=['iter', 'epoch'])
+    parser.add_argument('--save_path', type=str, default='experiment')
 
 
     args = parser.parse_args()

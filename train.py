@@ -12,10 +12,10 @@ import torch.optim as optim
 import dataloaders
 from utils.utils import AverageMeter
 from utils.loss import build_criterion
+from utils.metrics import Evaluator
 from utils.step_lr_scheduler import Iter_LR_Scheduler
 from retrain_model.build_autodeeplab import Retrain_Autodeeplab
 from config_utils.re_train_autodeeplab import obtain_retrain_autodeeplab_args
-
 
 
 def main():
@@ -23,12 +23,17 @@ def main():
     assert torch.cuda.is_available()
     torch.backends.cudnn.benchmark = True
     args = obtain_retrain_autodeeplab_args()
-    model_fname = 'data/deeplab_{0}_{1}_v3_{2}_epoch%d.pth'.format(args.backbone, args.dataset, args.exp)
+    save_dir = os.path.join('./data/', args.save_path)
+    if not os.path.isdir(save_dir):
+        os.mkdir(save_dir)
+    model_fname = os.path.join(save_dir,
+                               'deeplab_{0}_{1}_v3_{2}_epoch%d.pth'.format(args.backbone, args.dataset, args.exp))
+    record_name = os.path.join(save_dir, 'training_record.txt')
     if args.dataset == 'pascal':
         raise NotImplementedError
     elif args.dataset == 'cityscapes':
         kwargs = {'num_workers': args.workers, 'pin_memory': True, 'drop_last': True}
-        dataset_loader, num_classes = dataloaders.make_data_loader(args, **kwargs)
+        dataset_loader, num_classes, val_loader = dataloaders.make_data_loader(args, **kwargs)
         args.num_classes = num_classes
     else:
         raise ValueError('Unknown dataset: {}'.format(args.dataset))
@@ -58,6 +63,8 @@ def main():
     scheduler = Iter_LR_Scheduler(args, max_iteration, len(dataset_loader))
     start_epoch = 0
 
+    evaluator=Evaluator(num_classes)
+
     if args.resume:
         if os.path.isfile(args.resume):
             print('=> loading checkpoint {0}'.format(args.resume))
@@ -71,6 +78,8 @@ def main():
 
     for epoch in range(start_epoch, args.epochs):
         losses = AverageMeter()
+        print('Training epoch {}'.format(epoch))
+        model.train()
         for i, sample in enumerate(dataset_loader):
             cur_iter = epoch * len(dataset_loader) + i
             scheduler(optimizer, cur_iter)
@@ -85,9 +94,10 @@ def main():
             loss.backward()
             optimizer.step()
             optimizer.zero_grad()
-
-            print('epoch: {0}\t''iter: {1}/{2}\t''lr: {3:.6f}\t''loss: {loss.val:.4f} ({loss.ema:.4f})'.format(
-                epoch + 1, i + 1, len(dataset_loader), scheduler.get_lr(optimizer), loss=losses))
+            if (i + 1) % 200 == 0:
+                print('epoch: {0}\t''iter: {1}/{2}\t''lr: {3:.6f}\t''loss: {loss.val:.4f} ({loss.ema:.4f})'.format(
+                    epoch + 1, i + 1, len(dataset_loader), scheduler.get_lr(optimizer), loss=losses))
+            break
         if epoch < args.epochs - 50:
             if epoch % 50 == 0:
                 torch.save({
@@ -102,7 +112,39 @@ def main():
                 'optimizer': optimizer.state_dict(),
             }, model_fname % (epoch + 1))
 
-        print('reset local total loss!')
+        print('Validate epoch {}'.format(epoch))
+        model.eval()
+        evaluator.reset()
+        test_loss=0.0
+        for i,sample in enumerate(val_loader):
+            inputs = sample['image'].cuda()
+            target = sample['label'].cuda()
+            with torch.no_grad():
+                outputs = model(inputs)
+            # loss = criterion(outputs, target)
+            # test_loss+=loss.item()
+            pred=outputs.data.cpu().numpy()
+            target=target.cpu().numpy()
+            pred = np.argmax(pred, axis=1)
+            evaluator.add_batch(target,pred)
+        Acc = evaluator.Pixel_Accuracy()
+        Acc_class = evaluator.Pixel_Accuracy_Class()
+        mIoU = evaluator.Mean_Intersection_over_Union()
+        FWIoU = evaluator.Frequency_Weighted_Intersection_over_Union()
+        print("epoch: {}\t Acc:{:.3f}, Acc_class:{:.3f}, mIoU:{:.3f}, fwIoU: {:.3f}".format(epoch,Acc, Acc_class, mIoU, FWIoU))
+
+
+        line0 = 'epoch: {0}\t''loss: {loss.val:.4f} ({loss.ema:.4f})'.format(
+            epoch, loss=losses)
+        line1='epoch: {}\t''mIoU: {:.3f}'.format(epoch,mIoU)
+        with open(record_name, 'a') as f:
+            f.write(line0)
+            if line0[-1] != '\n':
+                f.write('\n')
+            f.write(line1)
+            if line1[-1] != '\n':
+                f.write('\n')
+
 
 if __name__ == "__main__":
     main()
