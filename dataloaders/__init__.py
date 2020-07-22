@@ -58,7 +58,10 @@ def make_data_loader(args, **kwargs):
 
         elif args.dataset == 'cityscapes':
             if args.autodeeplab == 'search':
-                train_set1, train_set2 = cityscapes.twoTrainSeg(args)
+                if args.trainset_rate is not None:
+                    train_set1,train_set2=cityscapes.twoTrainSeg_rate(args)
+                else:
+                    train_set1, train_set2 = cityscapes.twoTrainSeg(args)
                 num_class = train_set1.NUM_CLASSES
                 train_loader1 = DataLoader(train_set1, batch_size=args.batch_size, shuffle=True, **kwargs)
                 train_loader2 = DataLoader(train_set2, batch_size=args.batch_size, shuffle=True, **kwargs)

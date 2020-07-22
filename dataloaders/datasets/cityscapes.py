@@ -12,8 +12,28 @@ def twoTrainSeg(args, root=Path.db_root_dir('cityscapes')):
                    for filename in filenames if filename.endswith('.png')]
     number_images = len(train_files)
     permuted_indices_ls = np.random.permutation(number_images)
-    indices_1 = permuted_indices_ls[: int(0.5 * number_images) + 1]
+    indices_1 = permuted_indices_ls[: int(0.5 * number_images)]
     indices_2 = permuted_indices_ls[int(0.5 * number_images):]
+    if len(indices_1) % 2 != 0 or len(indices_2) % 2 != 0:
+        raise Exception('indices lists need to be even numbers for batch norm')
+    return CityscapesSegmentation(args, split='train', indices_for_split=indices_1), CityscapesSegmentation(args,
+                                                                                                            split='train',
+                                                                                                            indices_for_split=indices_2)
+
+
+def twoTrainSeg_rate(args, root=Path.db_root_dir('cityscapes')):
+    images_base = os.path.join(root, 'leftImg8bit', 'train')
+    train_files = [os.path.join(looproot, filename) for looproot, _, filenames in os.walk(images_base)
+                   for filename in filenames if filename.endswith('.png')]
+    number_images = len(train_files)
+    np.random.seed(args.seed)
+    trainset_rate = args.trainset_rate
+    if trainset_rate>1.0:
+        raise Exception('rate of training set must <= 1')
+    permuted_indices_ls = np.random.permutation(number_images)
+    indices_1 = permuted_indices_ls[: int(0.5 * number_images * trainset_rate) // 2 * 2]
+    indices_2 = permuted_indices_ls[
+                int(0.5 * number_images):int(0.5 * number_images) + int(0.5 * number_images * trainset_rate) // 2 * 2]
     if len(indices_1) % 2 != 0 or len(indices_2) % 2 != 0:
         raise Exception('indices lists need to be even numbers for batch norm')
     return CityscapesSegmentation(args, split='train', indices_for_split=indices_1), CityscapesSegmentation(args,

@@ -50,7 +50,7 @@ class Cell(nn.Module):
             s1 = F.interpolate(s1, [feature_size_h, feature_size_w], mode='bilinear', align_corners=True)
         if (s0.shape[2] != s1.shape[2]) or (s0.shape[3] != s1.shape[3]):
             s0 = F.interpolate(s0, (s1.shape[2], s1.shape[3]),
-                                            mode='bilinear', align_corners=True)
+                               mode='bilinear', align_corners=True)
 
         s0 = self.pre_preprocess(s0) if (s0.shape[1] != self.C_out) else s0
         s1 = self.preprocess(s1)
@@ -79,8 +79,123 @@ class Cell(nn.Module):
         return prev_input, concat_feature
 
 
+class Cell_splitAtt(nn.Module):
+
+    def __init__(self, steps, block_multiplier, prev_prev_fmultiplier,
+                 prev_filter_multiplier, cell_arch, network_arch,
+                 filter_multiplier, downup_sample, args=None, reduction_factor=4):
+        super(Cell_splitAtt, self).__init__()
+        self.cell_arch = cell_arch
+
+        self.C_in = block_multiplier * filter_multiplier
+        self.C_out = filter_multiplier
+        self.C_prev = int(block_multiplier * prev_filter_multiplier)
+        self.C_prev_prev = int(block_multiplier * prev_prev_fmultiplier)
+        self.downup_sample = downup_sample
+        self.pre_preprocess = ReLUConvBN(self.C_prev_prev, self.C_out, 1, 1, 0, args.affine, args.use_ABN)
+        self.preprocess = ReLUConvBN(self.C_prev, self.C_out, 1, 1, 0, args.affine, args.use_ABN)
+        self._steps = steps
+        self.block_multiplier = block_multiplier
+        self._ops = nn.ModuleList()
+        self._splitatt = nn.ModuleList()
+        self._rsoftmax = nn.ModuleList()
+        self._bn = nn.ModuleList()
+        self.relu = nn.ReLU(inplace=True)
+        self.reduction_factor = reduction_factor
+        steps_len = [2, 2, 2, 2, 2]
+        if downup_sample == -1:
+            self.scale = 0.5
+        elif downup_sample == 1:
+            self.scale = 2
+        for x in self.cell_arch:
+            primitive = PRIMITIVES[x[1]]
+            op = OPS[primitive](self.C_out, stride=1, affine=args.affine, use_ABN=args.use_ABN)
+            self._ops.append(op)
+        for i in range(self._steps):
+            inter_channels = steps_len[i] * filter_multiplier / self.reduction_factor
+            fc1 = nn.Conv2d(self.C_out, inter_channels, 1)
+            fc2 = nn.Conv2d(inter_channels, self.C_out * steps_len[i], 1)
+            rsoftmax = rSoftMax(steps_len[i], 1)
+            self._splitatt.append(fc1)
+            self._splitatt.append(fc2)
+            self._rsoftmax.append(rsoftmax)
+            self._bn.append(nn.BatchNorm2d(inter_channels))
+            # self._bn.append(nn.BatchNorm2d(self.C_out * steps_len[i]))
+
+    def scale_dimension(self, dim, scale):
+        return (int((float(dim) - 1.0) * scale + 1.0) if dim % 2 == 1 else int((float(dim) * scale)))
+
+    def forward(self, prev_prev_input, prev_input):
+        s0 = prev_prev_input
+        s1 = prev_input
+        if self.downup_sample != 0:
+            feature_size_h = self.scale_dimension(s1.shape[2], self.scale)
+            feature_size_w = self.scale_dimension(s1.shape[3], self.scale)
+            s1 = F.interpolate(s1, [feature_size_h, feature_size_w], mode='bilinear', align_corners=True)
+        if (s0.shape[2] != s1.shape[2]) or (s0.shape[3] != s1.shape[3]):
+            s0 = F.interpolate(s0, (s1.shape[2], s1.shape[3]),
+                               mode='bilinear', align_corners=True)
+
+        s0 = self.pre_preprocess(s0) if (s0.shape[1] != self.C_out) else s0
+        s1 = self.preprocess(s1)
+
+        states = [s0, s1]
+        offset = 0
+        ops_index = 0
+        for i in range(self._steps):
+            new_states = []
+            for j, h in enumerate(states):
+                branch_index = offset + j
+                if branch_index in self.cell_arch[:, 0]:
+                    if prev_prev_input is None and j == 0:
+                        ops_index += 1
+                        continue
+                    new_state = self._ops[ops_index](h)
+                    new_states.append(new_state)
+                    ops_index += 1
+
+            gap = sum(new_states)
+            rchannel = len(new_states) * gap.shape[1]
+            gap = F.adaptive_avg_pool2d(gap, 1)
+            gap = self._splitatt[i * 2](gap)
+            gap = self._bn[i](gap)
+            gap = self.relu(gap)
+            atten = self._splitatt[i * 2 + 1](gap)
+            atten = self.rsoftmax(atten).view(gap.shape[0], -1, 1, 1)
+            if torch.__version__ < '1.5':
+                attens = torch.split(atten, gap.shape[1], dim=1)
+            else:
+                attens = torch.split(atten, gap.shape[1], dim=1)
+            s = sum([att * split for (att, split) in zip(attens, new_states)])
+            # s = sum(new_states)
+            offset += len(states)
+            states.append(s)
+
+        concat_feature = torch.cat(states[-self.block_multiplier:], dim=1)
+
+        return prev_input, concat_feature
+
+
+class rSoftMax(nn.Module):
+    def __init__(self, radix, cardinality):
+        super().__init__()
+        self.radix = radix
+        self.cardinality = cardinality
+
+    def forward(self, x):
+        batch = x.size(0)
+        if self.radix > 1:
+            x = x.view(batch, self.cardinality, self.radix, -1).transpose(1, 2)
+            x = F.softmax(x, dim=1)
+            x = x.reshape(batch, -1)
+        else:
+            x = torch.sigmoid(x)
+        return x
+
+
 class newModel(nn.Module):
-    def __init__(self, network_arch, cell_arch, num_classes, num_layers, filter_multiplier=20, lock_multiplier=5, step=5, cell=Cell,
+    def __init__(self, network_arch, cell_arch, num_classes, num_layers, filter_multiplier=20, lock_multiplier=5,
+                 step=5, cell=Cell,
                  BatchNorm=NaiveBN, args=None):
         super(newModel, self).__init__()
         self.args = args
@@ -95,6 +210,8 @@ class newModel(nn.Module):
         self.use_ABN = args.use_ABN
         initial_fm = 128 if args.initial_fm is None else args.initial_fm
         half_initial_fm = initial_fm // 2
+        if args.cell_splitatt:
+            cell=Cell_splitAtt
         self.stem0 = nn.Sequential(
             nn.Conv2d(3, half_initial_fm, 3, stride=2, padding=1),
             BatchNorm(half_initial_fm)
@@ -211,12 +328,12 @@ def get_default_cell():
     cell[6] = [11, 5]
     cell[7] = [13, 5]
     cell[8] = [19, 7]
-    cell[9] = [18, 5]
+    cell[9] = [17, 5]
     return cell.astype('uint8')
 
 
 def get_default_arch():
-    backbone = [1, 0, 0, 1, 2, 1, 2, 2, 3, 3, 2, 1]
+    backbone = [0, 0, 0, 1, 2, 1, 2, 2, 3, 3, 2, 1]
     cell_arch = get_default_cell()
     return network_layer_to_space(backbone), cell_arch, backbone
 
@@ -225,3 +342,8 @@ def get_default_net(args=None):
     filter_multiplier = args.filter_multiplier if args is not None else 20
     path_arch, cell_arch, backbone = get_default_arch()
     return newModel(path_arch, cell_arch, 19, 12, filter_multiplier=filter_multiplier, args=args)
+
+
+if __name__ == "__main__":
+    net_space, cell_arch, backbone = get_default_arch()
+    print(net_space)

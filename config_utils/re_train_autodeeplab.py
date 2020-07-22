@@ -42,7 +42,7 @@ def obtain_retrain_autodeeplab_args():
     parser.add_argument('--local_rank', dest='local_rank', type=int, default=-1, )
     parser.add_argument('--train_mode', type=str, default='iter', choices=['iter', 'epoch'])
     parser.add_argument('--save_path', type=str, default='experiment')
-
+    parser.add_argument('--cell_splitatt', type=bool, default=False, help='whether use splitAtt in cells')
 
     args = parser.parse_args()
     return args

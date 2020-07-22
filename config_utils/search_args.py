@@ -35,6 +35,7 @@ def obtain_search_args():
     parser.add_argument('--loss-type', type=str, default='ce',
                         choices=['ce', 'focal'],
                         help='loss func type (default: ce)')
+    parser.add_argument('--dist', default=False, type=bool)
     # training hyper params
     parser.add_argument('--epochs', type=int, default=None, metavar='N',
                         help='number of epochs to train (default: auto)')
@@ -53,6 +54,7 @@ def obtain_search_args():
                                 testing (default: auto)')
     parser.add_argument('--use_balanced_weights', action='store_true', default=False,
                         help='whether to use balanced weights (default: False)')
+    parser.add_argument('--trainset_rate',type=float,default=None,help='rate of trainset to use')
     # optimizer params
     parser.add_argument('--lr', type=float, default=0.025, metavar='LR',
                         help='learning rate (default: auto)')
