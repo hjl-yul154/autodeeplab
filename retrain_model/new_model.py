@@ -112,7 +112,7 @@ class Cell_splitAtt(nn.Module):
             op = OPS[primitive](self.C_out, stride=1, affine=args.affine, use_ABN=args.use_ABN)
             self._ops.append(op)
         for i in range(self._steps):
-            inter_channels = steps_len[i] * filter_multiplier / self.reduction_factor
+            inter_channels = max(int(steps_len[i] * filter_multiplier / self.reduction_factor), 8)
             fc1 = nn.Conv2d(self.C_out, inter_channels, 1)
             fc2 = nn.Conv2d(inter_channels, self.C_out * steps_len[i], 1)
             rsoftmax = rSoftMax(steps_len[i], 1)
@@ -161,7 +161,7 @@ class Cell_splitAtt(nn.Module):
             gap = self._bn[i](gap)
             gap = self.relu(gap)
             atten = self._splitatt[i * 2 + 1](gap)
-            atten = self.rsoftmax(atten).view(gap.shape[0], -1, 1, 1)
+            atten = self._rsoftmax[i](atten).view(gap.shape[0], -1, 1, 1)
             if torch.__version__ < '1.5':
                 attens = torch.split(atten, gap.shape[1], dim=1)
             else:
@@ -211,7 +211,7 @@ class newModel(nn.Module):
         initial_fm = 128 if args.initial_fm is None else args.initial_fm
         half_initial_fm = initial_fm // 2
         if args.cell_splitatt:
-            cell=Cell_splitAtt
+            cell = Cell_splitAtt
         self.stem0 = nn.Sequential(
             nn.Conv2d(3, half_initial_fm, 3, stride=2, padding=1),
             BatchNorm(half_initial_fm)

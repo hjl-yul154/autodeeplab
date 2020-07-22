@@ -98,8 +98,8 @@ def main():
                 print('epoch: {0}\t''iter: {1}/{2}\t''lr: {3:.6f}\t''loss: {loss.val:.4f} ({loss.ema:.4f})'.format(
                     epoch + 1, i + 1, len(dataset_loader), scheduler.get_lr(optimizer), loss=losses))
             break
-        if epoch < args.epochs - 50:
-            if epoch % 50 == 0:
+        if epoch < args.epochs:
+            if (epoch+1) % 10 == 0:
                 torch.save({
                     'epoch': epoch + 1,
                     'state_dict': model.state_dict(),

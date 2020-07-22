@@ -28,8 +28,11 @@ def twoTrainSeg_rate(args, root=Path.db_root_dir('cityscapes')):
     number_images = len(train_files)
     np.random.seed(args.seed)
     trainset_rate = args.trainset_rate
-    if trainset_rate>1.0:
-        raise Exception('rate of training set must <= 1')
+    if trainset_rate is not None:
+        if trainset_rate>1.0:
+            raise Exception('rate of training set must <= 1')
+    else:
+        trainset_rate=1
     permuted_indices_ls = np.random.permutation(number_images)
     indices_1 = permuted_indices_ls[: int(0.5 * number_images * trainset_rate) // 2 * 2]
     indices_2 = permuted_indices_ls[
@@ -66,6 +69,11 @@ class CityscapesSegmentation(data.Dataset):
             self.annotations_base = os.path.join(self.root, 'gtFine', self.split)
 
         self.files[split] = self.recursive_glob(rootdir=self.images_base, suffix='.png')
+
+        if args.trainset_rate is not None:
+            np.random.seed(args.seed)
+            permuted_indices_ls = np.random.permutation(len(self.files[self.split]))
+            indices_for_split=permuted_indices_ls[:int(len(self.files[self.split])*args.trainset_rate)//2*2]
 
         if indices_for_split is not None:
             self.files[split] = np.array(self.files[split])[indices_for_split].tolist()
