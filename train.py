@@ -97,9 +97,8 @@ def main():
             if (i + 1) % 200 == 0:
                 print('epoch: {0}\t''iter: {1}/{2}\t''lr: {3:.6f}\t''loss: {loss.val:.4f} ({loss.ema:.4f})'.format(
                     epoch + 1, i + 1, len(dataset_loader), scheduler.get_lr(optimizer), loss=losses))
-            break
         if epoch < args.epochs:
-            if (epoch+1) % 10 == 0:
+            if (epoch+1) % 5 == 0:
                 torch.save({
                     'epoch': epoch + 1,
                     'state_dict': model.state_dict(),
@@ -119,7 +118,7 @@ def main():
             if line0[-1] != '\n':
                 f.write('\n')
 
-        if epoch%3!=0 and epoch <args.epoch-10:
+        if epoch%3!=0 and epoch <args.epochs-20:
             continue
 
         print('Validate epoch {}'.format(epoch))

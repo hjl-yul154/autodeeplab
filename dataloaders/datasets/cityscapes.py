@@ -72,7 +72,7 @@ class CityscapesSegmentation(data.Dataset):
 
         if args.trainset_rate is not None and indices_for_split is None and 'train' in split:
             np.random.seed(args.seed)
-            permuted_indices_ls = np.random.permutation(len(self.files[self.split]))
+            permuted_indices_ls = [i for i in range(len(self.files[self.split]))]
             indices_for_split=permuted_indices_ls[:int(len(self.files[self.split])*args.trainset_rate)//2*2]
 
         if indices_for_split is not None:
