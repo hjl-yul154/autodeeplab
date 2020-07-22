@@ -4,13 +4,13 @@ import argparse
 def obtain_retrain_autodeeplab_args():
     parser = argparse.ArgumentParser(description="PyTorch Autodeeplabv3+ Training")
     parser.add_argument('--train', action='store_true', default=True, help='training mode')
-    parser.add_argument('--exp', type=str, default='bnlr7e-3', help='name of experiment')
+    parser.add_argument('--exp', type=str, default='experiment', help='name of experiment')
     parser.add_argument('--gpu', type=str, default='0', help='test time gpu device id')
     parser.add_argument('--backbone', type=str, default='autodeeplab', help='resnet101')
     parser.add_argument('--dataset', type=str, default='cityscapes', help='pascal or cityscapes')
     parser.add_argument('--groups', type=int, default=None, help='num of groups for group normalization')
-    parser.add_argument('--epochs', type=int, default=4000, help='num of training epochs')
-    parser.add_argument('--batch_size', type=int, default=14, help='batch size')
+    parser.add_argument('--epochs', type=int, default=100, help='num of training epochs')
+    parser.add_argument('--batch_size', type=int, default=2, help='batch size')
     parser.add_argument('--base_lr', type=float, default=0.05, help='base learning rate')
     parser.add_argument('--warmup_start_lr', type=float, default=5e-6, help='warm up learning rate')
     parser.add_argument('--lr-step', type=float, default=None)
@@ -30,7 +30,7 @@ def obtain_retrain_autodeeplab_args():
     parser.add_argument('--dist', type=bool, default=False)
     parser.add_argument('--autodeeplab', type=str, default='train')
     parser.add_argument('--block_multiplier', type=int, default=5)
-    parser.add_argument('--use-ABN', default=True, type=bool, help='whether use ABN')
+    parser.add_argument('--use-ABN', default=False, type=bool, help='whether use ABN')
     parser.add_argument('--affine', default=False, type=bool, help='whether use affine in BN')
     parser.add_argument('--port', default=6000, type=int)
     parser.add_argument('--max-iteration', default=1000000, type=bool)
@@ -43,6 +43,7 @@ def obtain_retrain_autodeeplab_args():
     parser.add_argument('--train_mode', type=str, default='iter', choices=['iter', 'epoch'])
     parser.add_argument('--save_path', type=str, default='experiment')
     parser.add_argument('--cell_splitatt', type=bool, default=False, help='whether use splitAtt in cells')
+    parser.add_argument('--trainset_rate', type=float, default=None, help='rate of trainset to use')
 
     args = parser.parse_args()
     return args

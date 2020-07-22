@@ -112,6 +112,16 @@ def main():
                 'optimizer': optimizer.state_dict(),
             }, model_fname % (epoch + 1))
 
+        line0 = 'epoch: {0}\t''loss: {loss.val:.4f} ({loss.ema:.4f})'.format(
+            epoch, loss=losses)
+        with open(record_name, 'a') as f:
+            f.write(line0)
+            if line0[-1] != '\n':
+                f.write('\n')
+
+        if epoch%3!=0 and epoch <args.epoch-10:
+            continue
+
         print('Validate epoch {}'.format(epoch))
         model.eval()
         evaluator.reset()
@@ -133,14 +143,8 @@ def main():
         FWIoU = evaluator.Frequency_Weighted_Intersection_over_Union()
         print("epoch: {}\t Acc:{:.3f}, Acc_class:{:.3f}, mIoU:{:.3f}, fwIoU: {:.3f}".format(epoch,Acc, Acc_class, mIoU, FWIoU))
 
-
-        line0 = 'epoch: {0}\t''loss: {loss.val:.4f} ({loss.ema:.4f})'.format(
-            epoch, loss=losses)
         line1='epoch: {}\t''mIoU: {:.3f}'.format(epoch,mIoU)
         with open(record_name, 'a') as f:
-            f.write(line0)
-            if line0[-1] != '\n':
-                f.write('\n')
             f.write(line1)
             if line1[-1] != '\n':
                 f.write('\n')
