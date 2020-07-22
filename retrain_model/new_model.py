@@ -163,9 +163,9 @@ class Cell_splitAtt(nn.Module):
             atten = self._splitatt[i * 2 + 1](gap)
             atten = self._rsoftmax[i](atten).view(gap.shape[0], -1, 1, 1)
             if torch.__version__ < '1.5':
-                attens = torch.split(atten, gap.shape[1], dim=1)
+                attens = torch.split(atten, new_states[0].shape[1], dim=1)
             else:
-                attens = torch.split(atten, gap.shape[1], dim=1)
+                attens = torch.split(atten, new_states[0].shape[1], dim=1)
             s = sum([att * split for (att, split) in zip(attens, new_states)])
             # s = sum(new_states)
             offset += len(states)
@@ -212,6 +212,7 @@ class newModel(nn.Module):
         half_initial_fm = initial_fm // 2
         if args.cell_splitatt:
             cell = Cell_splitAtt
+            print('use cell with splitAtt')
         self.stem0 = nn.Sequential(
             nn.Conv2d(3, half_initial_fm, 3, stride=2, padding=1),
             BatchNorm(half_initial_fm)
